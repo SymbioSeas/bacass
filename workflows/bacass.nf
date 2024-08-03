@@ -565,13 +565,13 @@ workflow BACASS {
         ch_kmerfinder_multiqc.collectFile(name: 'multiqc_kmerfinder.yaml').ifEmpty([]),
     )
     multiqc_report = MULTIQC_CUSTOM.out.report.toList()
-
+    
     emit:
     multiqc_report = MULTIQC_CUSTOM.out.report.toList() // channel: /path/to/multiqc_report.html
     versions       = ch_versions                        // channel: [ path(versions.yml) ]
-}
+    }
 
-//	Custom output directory for software versions
+// Custom output directory for software versions
 softwareVersionsToYAML(ch_versions)
     .collectFile(
         storeDir: "${params.outdir}/Software_Versions", // Customized output directory
@@ -579,7 +579,7 @@ softwareVersionsToYAML(ch_versions)
         sort: true,
         newLine: true
     ).set { ch_collated_versions }
-    
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     THE END
