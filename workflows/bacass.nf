@@ -167,7 +167,7 @@ workflow BACASS {
             ch_fast5.dump(tag: 'fast5')
         )
         ch_pycoqc_multiqc = PYCOQC.out.json
-        ch_versions       = ch_versions.mix(PYCOQC.out.versions)
+        ch_versions = ch_versions.mix(PYCOQC.out.versions)
     }
 
     //
@@ -403,7 +403,7 @@ workflow BACASS {
         )
         ch_kmerfinder_multiqc   = KMERFINDER_SUBWORKFLOW.out.summary_yaml
         ch_consensus_byrefseq   = KMERFINDER_SUBWORKFLOW.out.consensus_byrefseq
-        ch_versions             = ch_versions.mix(KMERFINDER_SUBWORKFLOW.out.versions)
+        ch_versions = ch_versions.mix(KMERFINDER_SUBWORKFLOW.out.versions)
 
         // Set channel to perform by refseq QUAST based on reference genome identified with KMERFINDER.
         ch_consensus_byrefseq
@@ -446,7 +446,7 @@ workflow BACASS {
         ).collectFile(storeDir: "${params.outdir}/QC_Files/QUAST")
             .set { ch_quast_byrefseq_multiqc }
             
-        ch_versions      = ch_versions.mix(QUAST_BYREFSEQID.out.versions)
+        ch_versions = ch_versions.mix(QUAST_BYREFSEQID.out.versions)
     }
     ch_versions = ch_versions.mix(QUAST.out.versions)
 
@@ -466,7 +466,7 @@ workflow BACASS {
         // Uncompress assembly for annotation if necessary
         GUNZIP ( ch_assembly_for_gunzip.gzip )
         ch_to_prokka    = ch_assembly_for_gunzip.skip.mix( GUNZIP.out.gunzip )
-        ch_versions     = ch_versions.mix( GUNZIP.out.versions )
+        ch_versions = ch_versions.mix( GUNZIP.out.versions )
 
         PROKKA (
             ch_to_prokka,
@@ -474,7 +474,7 @@ workflow BACASS {
             []
         )
         ch_prokka_txt_multiqc   = PROKKA.out.txt.map{ meta, prokka_txt -> [ prokka_txt ]}
-        ch_versions             = ch_versions.mix(PROKKA.out.versions)
+        ch_versions = ch_versions.mix(PROKKA.out.versions)
     }
 
     //
@@ -485,7 +485,7 @@ workflow BACASS {
         // Uncompress assembly for annotation if necessary
         GUNZIP ( ch_assembly_for_gunzip.gzip )
         ch_to_bakta     = ch_assembly_for_gunzip.skip.mix( GUNZIP.out.gunzip )
-        ch_versions     = ch_versions.mix( GUNZIP.out.versions )
+        ch_versions = ch_versions.mix( GUNZIP.out.versions )
 
         BAKTA_DBDOWNLOAD_RUN (
             ch_to_bakta,
@@ -493,7 +493,7 @@ workflow BACASS {
             params.baktadb_download
         )
         ch_bakta_txt_multiqc    = BAKTA_DBDOWNLOAD_RUN.out.bakta_txt_multiqc.collectFile(storeDir: "${params.outdir}/{annotator_dir}").map{ meta, bakta_txt -> [ bakta_txt ]}
-        ch_versions             = ch_versions.mix(BAKTA_DBDOWNLOAD_RUN.out.versions)
+        ch_versions = ch_versions.mix(BAKTA_DBDOWNLOAD_RUN.out.versions)
     }
     //
     // MODULE: DFAST, gene annotation
