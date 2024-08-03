@@ -506,7 +506,16 @@ workflow BACASS {
         )
         ch_versions = ch_versions.mix(DFAST.out.versions)
     }
-
+    //
+    // MODULE: MultiQC
+    //
+    ch_multiqc_config                     = !params.skip_kmerfinder && params.assembly_type ? Channel.fromPath("$projectDir/assets/multiqc_config_${params.assembly_type}.yml", checkIfExists: true) : Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
+    ch_multiqc_custom_config              = params.multiqc_config ? Channel.fromPath(params.multiqc_config, checkIfExists: true) : Channel.empty()
+    ch_multiqc_logo                       = params.multiqc_logo ? Channel.fromPath(params.multiqc_logo, checkIfExists: true) : Channel.empty()
+    summary_params                        = paramsSummaryMap(workflow, parameters_schema: "nextflow_schema.json")
+    ch_workflow_summary                   = Channel.value(paramsSummaryMultiqc(summary_params))
+    ch_multiqc_custom_methods_description = params.multiqc_methods_description ? Channel.fromPath(params.multiqc_methods_description, checkIfExists: true) : Channel.fromPath("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
+       
     //        
     // Custom output directory for MultiQC
     MULTIQC_CUSTOM (
@@ -534,42 +543,6 @@ workflow BACASS {
         multiqc_report	= MULTIQC_CUSTOM.out.report.toList()	// channel: /path/to/multiqc_report.html
         versions	= ch_versions	// channel: [	path(versions.yml)	]
         }
-
-    //
-    // MODULE: MultiQC
-    //
-    ch_multiqc_config                     = !params.skip_kmerfinder && params.assembly_type ? Channel.fromPath("$projectDir/assets/multiqc_config_${params.assembly_type}.yml", checkIfExists: true) : Channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
-    ch_multiqc_custom_config              = params.multiqc_config ? Channel.fromPath(params.multiqc_config, checkIfExists: true) : Channel.empty()
-    ch_multiqc_logo                       = params.multiqc_logo ? Channel.fromPath(params.multiqc_logo, checkIfExists: true) : Channel.empty()
-    summary_params                        = paramsSummaryMap(workflow, parameters_schema: "nextflow_schema.json")
-    ch_workflow_summary                   = Channel.value(paramsSummaryMultiqc(summary_params))
-    ch_multiqc_custom_methods_description = params.multiqc_methods_description ? Channel.fromPath(params.multiqc_methods_description, checkIfExists: true) : Channel.fromPath("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
-
-    MULTIQC_CUSTOM (
-        ch_multiqc_config.ifEmpty([]),
-        ch_multiqc_custom_config.ifEmpty([]),
-        ch_multiqc_logo.ifEmpty([]),
-        ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'),
-        ch_multiqc_custom_methods_description.ifEmpty([]),
-        ch_collated_versions.ifEmpty([]),
-        ch_fastqc_raw_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_trim_json_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_nanoplot_txt_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_porechop_log_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_pycoqc_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_kraken_short_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_kraken_long_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_quast_multiqc.collect{it[1]}.ifEmpty([]),
-        ch_prokka_txt_multiqc.collect().ifEmpty([]),
-        ch_bakta_txt_multiqc.collect().ifEmpty([]),
-        ch_kmerfinder_multiqc.collectFile(name: 'multiqc_kmerfinder.yaml').ifEmpty([]),
-    )
-    multiqc_report = MULTIQC_CUSTOM.out.report.toList()
-    
-    emit:
-    multiqc_report = MULTIQC_CUSTOM.out.report.toList() // channel: /path/to/multiqc_report.html
-    versions       = ch_versions                        // channel: [ path(versions.yml) ]
-    }
 
 // Custom output directory for software versions
 softwareVersionsToYAML(ch_versions)
