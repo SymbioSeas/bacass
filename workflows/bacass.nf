@@ -506,6 +506,16 @@ workflow BACASS {
         )
         ch_versions = ch_versions.mix(DFAST.out.versions)
     }
+    
+    // Custom output directory for software versions
+softwareVersionsToYAML(ch_versions)
+    .collectFile(
+        storeDir: "${params.outdir}/Software_Versions", // Customized output directory
+        name: 'nf_core_pipeline_software_mqc_versions.yml',
+        sort: true,
+        newLine: true
+    ).set { ch_collated_versions }
+
     //
     // MODULE: MultiQC
     //
@@ -543,15 +553,6 @@ workflow BACASS {
         multiqc_report	= MULTIQC_CUSTOM.out.report.toList()	// channel: /path/to/multiqc_report.html
         versions	= ch_versions	// channel: [	path(versions.yml)	]
         }
-
-// Custom output directory for software versions
-softwareVersionsToYAML(ch_versions)
-    .collectFile(
-        storeDir: "${params.outdir}/Software_Versions", // Customized output directory
-        name: 'nf_core_pipeline_software_mqc_versions.yml',
-        sort: true,
-        newLine: true
-    ).set { ch_collated_versions }
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
