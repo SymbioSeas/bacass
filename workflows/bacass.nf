@@ -90,10 +90,6 @@ workflow BACASS {
     main:
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
-    
-    def assembler_dir = "${params.assembler.capitalize()}_Assemblies"
-    def annotator_dir = "${params.annotation_tool.capitalize()}_Annotations"
-    
     //
     // SUBWORKFLOW: Read in samplesheet, validate and stage input files
     //
@@ -129,7 +125,6 @@ workflow BACASS {
     //
     // SUBWORKFLOW: Short reads QC and trim adapters
     //
-    // Custom output directory for trimming, FastQC, etc.
     ch_fastqc_raw_multiqc = Channel.empty()
     ch_fastqc_trim_multiqc = Channel.empty()
     ch_trim_json_multiqc = Channel.empty()
@@ -142,9 +137,9 @@ workflow BACASS {
         params.skip_fastp,
         params.skip_fastqc
         )
-        ch_fastqc_raw_multiqc   = FASTQ_TRIM_FASTP_FASTQC.out.fastqc_raw_zip.collectFile(storeDir: "${params.outdir}/QC_Files")
-        ch_fastqc_trim_multiqc  = FASTQ_TRIM_FASTP_FASTQC.out.fastqc_trim_zip.collectFile(storeDir: "${params.outdir}/QC_Files")
-        ch_trim_json_multiqc    = FASTQ_TRIM_FASTP_FASTQC.out.trim_json.collectFile(storeDir: "${params.outdir}/QC_Files")
+        ch_fastqc_raw_multiqc   = FASTQ_TRIM_FASTP_FASTQC.out.fastqc_raw_zip
+        ch_fastqc_trim_multiqc  = FASTQ_TRIM_FASTP_FASTQC.out.fastqc_trim_zip
+        ch_trim_json_multiqc    = FASTQ_TRIM_FASTP_FASTQC.out.trim_json
         ch_versions = ch_versions.mix(FASTQ_TRIM_FASTP_FASTQC.out.versions)
     }
 
@@ -167,7 +162,7 @@ workflow BACASS {
             ch_fast5.dump(tag: 'fast5')
         )
         ch_pycoqc_multiqc = PYCOQC.out.json
-        ch_versions = ch_versions.mix(PYCOQC.out.versions)
+        ch_versions       = ch_versions.mix(PYCOQC.out.versions)
     }
 
     //
@@ -220,12 +215,11 @@ workflow BACASS {
     //
     // MODULE: Unicycler, genome assembly, nf-core module allows only short, long and hybrid assembly
     //
-    // Custom output directory for Unicycler assembly files
     if ( params.assembler == 'unicycler' ) {
         UNICYCLER (
             ch_for_assembly
         )
-        ch_assembly = ch_assembly.mix( UNICYCLER.out.scaffolds.collectFile(storeDir: "${params.outdir}/${assembler_dir}").dump(tag: 'unicycler') )
+        ch_assembly = ch_assembly.mix( UNICYCLER.out.scaffolds.dump(tag: 'unicycler') )
         ch_versions = ch_versions.mix( UNICYCLER.out.versions )
     }
 
@@ -239,7 +233,7 @@ workflow BACASS {
             params.canu_mode,
             ch_for_assembly.map { meta, reads, lr -> meta.genome_size }
         )
-        ch_assembly = ch_assembly.mix( CANU.out.assembly.collectFile(storeDir: "${params.outdir}/${assembler_dir}").dump(tag: 'canu') )
+        ch_assembly = ch_assembly.mix( CANU.out.assembly.dump(tag: 'canu') )
         ch_versions = ch_versions.mix(CANU.out.versions)
     }
 
@@ -295,7 +289,7 @@ workflow BACASS {
         DRAGONFLYE(
             ch_for_assembly
         )
-        ch_assembly = ch_assembly.mix( DRAGONFLYE.out.contigs.collectFile(storeDir: "${params.outdir}/${assembler_dir}").dump(tag: 'dragonflye') )
+        ch_assembly = ch_assembly.mix( DRAGONFLYE.out.contigs.dump(tag: 'dragonflye') )
         ch_versions = ch_versions.mix( DRAGONFLYE.out.versions )
     }
 
@@ -403,7 +397,7 @@ workflow BACASS {
         )
         ch_kmerfinder_multiqc   = KMERFINDER_SUBWORKFLOW.out.summary_yaml
         ch_consensus_byrefseq   = KMERFINDER_SUBWORKFLOW.out.consensus_byrefseq
-        ch_versions = ch_versions.mix(KMERFINDER_SUBWORKFLOW.out.versions)
+        ch_versions             = ch_versions.mix(KMERFINDER_SUBWORKFLOW.out.versions)
 
         // Set channel to perform by refseq QUAST based on reference genome identified with KMERFINDER.
         ch_consensus_byrefseq
@@ -427,8 +421,8 @@ workflow BACASS {
             ch_to_quast,
             params.reference_fasta ?: [[:],[]],
             params.reference_gff ?: [[:],[]]
-        ).collectFile(storeDir: "${params.outdir}/QC_Files/QUAST")
-            .set { ch_quast_multiqc}
+        )
+        ch_quast_multiqc = QUAST.out.results
     } else if (!params.skip_kmerfinder) {
         // Quast runs twice if kmerfinder is allowed.
         // This approach allow Quast to calculate relevant parameters such as genome fraction based on a reference genome.
@@ -436,17 +430,14 @@ workflow BACASS {
             ch_to_quast,
             [[:],[]],
             [[:],[]]
-        ).collectFile(storeDir: "${params.outdir}/QC_Files/QUAST")
-            .set { ch_quast_multiqc }
-            
+        )
         QUAST_BYREFSEQID(
             ch_to_quast_byrefseq.map{ refmeta, consensus, ref_fasta, ref_gff -> tuple( refmeta, consensus)},
             ch_to_quast_byrefseq.map{ refmeta, consensus, ref_fasta, ref_gff -> tuple( refmeta, ref_fasta)},
             ch_to_quast_byrefseq.map{ refmeta, consensus, ref_fasta, ref_gff -> tuple( refmeta, ref_gff)}
-        ).collectFile(storeDir: "${params.outdir}/QC_Files/QUAST")
-            .set { ch_quast_byrefseq_multiqc }
-            
-        ch_versions = ch_versions.mix(QUAST_BYREFSEQID.out.versions)
+        )
+        ch_quast_multiqc = QUAST_BYREFSEQID.out.results
+        ch_versions      = ch_versions.mix(QUAST_BYREFSEQID.out.versions)
     }
     ch_versions = ch_versions.mix(QUAST.out.versions)
 
@@ -466,7 +457,7 @@ workflow BACASS {
         // Uncompress assembly for annotation if necessary
         GUNZIP ( ch_assembly_for_gunzip.gzip )
         ch_to_prokka    = ch_assembly_for_gunzip.skip.mix( GUNZIP.out.gunzip )
-        ch_versions = ch_versions.mix( GUNZIP.out.versions )
+        ch_versions     = ch_versions.mix( GUNZIP.out.versions )
 
         PROKKA (
             ch_to_prokka,
@@ -474,7 +465,7 @@ workflow BACASS {
             []
         )
         ch_prokka_txt_multiqc   = PROKKA.out.txt.map{ meta, prokka_txt -> [ prokka_txt ]}
-        ch_versions = ch_versions.mix(PROKKA.out.versions)
+        ch_versions             = ch_versions.mix(PROKKA.out.versions)
     }
 
     //
@@ -485,15 +476,15 @@ workflow BACASS {
         // Uncompress assembly for annotation if necessary
         GUNZIP ( ch_assembly_for_gunzip.gzip )
         ch_to_bakta     = ch_assembly_for_gunzip.skip.mix( GUNZIP.out.gunzip )
-        ch_versions = ch_versions.mix( GUNZIP.out.versions )
+        ch_versions     = ch_versions.mix( GUNZIP.out.versions )
 
         BAKTA_DBDOWNLOAD_RUN (
             ch_to_bakta,
             params.baktadb,
             params.baktadb_download
         )
-        ch_bakta_txt_multiqc    = BAKTA_DBDOWNLOAD_RUN.out.bakta_txt_multiqc.collectFile(storeDir: "${params.outdir}/{annotator_dir}").map{ meta, bakta_txt -> [ bakta_txt ]}
-        ch_versions = ch_versions.mix(BAKTA_DBDOWNLOAD_RUN.out.versions)
+        ch_bakta_txt_multiqc    = BAKTA_DBDOWNLOAD_RUN.out.bakta_txt_multiqc.map{ meta, bakta_txt -> [ bakta_txt ]}
+        ch_versions             = ch_versions.mix(BAKTA_DBDOWNLOAD_RUN.out.versions)
     }
     //
     // MODULE: DFAST, gene annotation
@@ -506,15 +497,17 @@ workflow BACASS {
         )
         ch_versions = ch_versions.mix(DFAST.out.versions)
     }
-    
-    // Custom output directory for software versions
-softwareVersionsToYAML(ch_versions)
-    .collectFile(
-        storeDir: "${params.outdir}/Software_Versions", // Customized output directory
-        name: 'nf_core_pipeline_software_mqc_versions.yml',
-        sort: true,
-        newLine: true
-    ).set { ch_collated_versions }
+
+    //
+    // Collate and save software versions
+    //
+    softwareVersionsToYAML(ch_versions)
+        .collectFile(
+            storeDir: "${params.outdir}/pipeline_info",
+            name: 'nf_core_pipeline_software_mqc_versions.yml',
+            sort: true,
+            newLine: true
+        ).set { ch_collated_versions }
 
     //
     // MODULE: MultiQC
@@ -525,18 +518,16 @@ softwareVersionsToYAML(ch_versions)
     summary_params                        = paramsSummaryMap(workflow, parameters_schema: "nextflow_schema.json")
     ch_workflow_summary                   = Channel.value(paramsSummaryMultiqc(summary_params))
     ch_multiqc_custom_methods_description = params.multiqc_methods_description ? Channel.fromPath(params.multiqc_methods_description, checkIfExists: true) : Channel.fromPath("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
-       
-    //        
-    // Custom output directory for MultiQC
+
     MULTIQC_CUSTOM (
         ch_multiqc_config.ifEmpty([]),
         ch_multiqc_custom_config.ifEmpty([]),
         ch_multiqc_logo.ifEmpty([]),
-        ch_workflow_summary.collectFile(name:'workflow_summary_mqc.yaml', storeDir: "${params.outdir}/QC_Files"),
+        ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'),
         ch_multiqc_custom_methods_description.ifEmpty([]),
         ch_collated_versions.ifEmpty([]),
-        ch_fastqc_raw_multiqc.ifEmpty([]),
-        ch_trim_json_multiqc.ifEmpty([]),
+        ch_fastqc_raw_multiqc.collect{it[1]}.ifEmpty([]),
+        ch_trim_json_multiqc.collect{it[1]}.ifEmpty([]),
         ch_nanoplot_txt_multiqc.collect{it[1]}.ifEmpty([]),
         ch_porechop_log_multiqc.collect{it[1]}.ifEmpty([]),
         ch_pycoqc_multiqc.collect{it[1]}.ifEmpty([]),
@@ -545,14 +536,14 @@ softwareVersionsToYAML(ch_versions)
         ch_quast_multiqc.collect{it[1]}.ifEmpty([]),
         ch_prokka_txt_multiqc.collect().ifEmpty([]),
         ch_bakta_txt_multiqc.collect().ifEmpty([]),
-        ch_kmerfinder_multiqc.collectFile(name: 'multiqc_kmerfinder.yaml', storeDir: "${params.outdir}/QC_Files").ifEmpty([])
-        )
-        multiqc_report = MULTIQC_CUSTOM.out.report.toList()
-        
-        emit:
-        multiqc_report	= MULTIQC_CUSTOM.out.report.toList()	// channel: /path/to/multiqc_report.html
-        versions	= ch_versions	// channel: [	path(versions.yml)	]
-        }
+        ch_kmerfinder_multiqc.collectFile(name: 'multiqc_kmerfinder.yaml').ifEmpty([]),
+    )
+    multiqc_report = MULTIQC_CUSTOM.out.report.toList()
+
+    emit:
+    multiqc_report = MULTIQC_CUSTOM.out.report.toList() // channel: /path/to/multiqc_report.html
+    versions       = ch_versions                        // channel: [ path(versions.yml) ]
+}
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
